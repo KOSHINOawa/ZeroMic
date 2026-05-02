@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="mdui-theme-dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZeroMic - Desktop Host</title>
+    
+    <link rel="stylesheet" href="./lib/mdui.css">
+    <script src="./lib/mdui.global.js"></script>
+    <link href="./lib/mdui-icons.css" rel="stylesheet">
+    <script src="./lib/socket.io.min.js"></script>
+
+    <style>
+        :root {
+            --color-initial: #757575;
+            --color-muted: rgb(255, 179, 174);
+            --color-bg: #121212;
+            --color-card: #1e1e1e;
+        }
+
+        
+        body {
+            margin: 0; 
+            padding: 0; 
+            background-color: var(--color-bg); 
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        
+        .header-bar {
+            height: 56px; 
+            display: flex; 
+            align-items: center;
+            background-color: #1a1a1a; 
+            padding: 0 20px;
+            border-bottom: 1px solid #222;
+        }
+        
+        .logo-area {
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.9);
+            letter-spacing: 0.5px;
+        }
+
+        
+        .tutorial-card {
+            background-color: var(--color-card); border-radius: 20px; padding: 24px 20px;
+            width: 100%; box-sizing: border-box; display: flex; flex-direction: column; 
+            align-items: center; text-align: center; border: 1px dashed #444;
+        }
+        .tutorial-ip-box {
+            background-color: #111; color: #fff; font-family: monospace; font-size: 16px;
+            padding: 8px 16px; border-radius: 8px; margin: 12px 0; font-weight: bold;
+            user-select: all; border: 1px solid #333;
+        }
+        
+        .pywebview-drag-region {
+            flex-grow: 1; height: 100%; display: flex; align-items: center;
+            font-size: 13px; color: #888; font-weight: 500; cursor: grab;
+        }
+
+        .window-controls { display: flex; gap: 4px; }
+        .win-btn {
+            width: 36px; height: 36px; border-radius: 8px; border: none; background: transparent;
+            color: #aaa; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s;
+        }
+        .win-btn:hover { background-color: rgba(255,255,255,0.1); color: #fff; }
+        .win-btn.close:hover { background-color: #d32f2f; }
+
+        
+        .content { padding: 20px; display: flex; flex-direction: column; align-items: center; flex-grow: 1; }
+
+        .status-card {
+            background-color: var(--color-card); border-radius: 20px; padding: 16px 20px;
+            width: 100%; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot.disconnected { background-color: #888; }
+        .dot.connected { background-color: #4CAF50; box-shadow: 0 0 8px #4CAF50; }
+
+        .control-card {
+            width: 100%; background-color: var(--color-card); border-radius: 20px; padding: 12px 20px;
+            box-sizing: border-box; display: flex; align-items: center; gap: 16px; margin-bottom: 40px;
+        }
+
+        
+        .speaker-section { position: relative; width: 180px; height: 180px; display: flex; justify-content: center; align-items: center; }
+        
+        .volume-ring {
+            position: absolute; width: 120px; height: 120px; border-radius: 50%; opacity: 0.2;
+            z-index: 0; transition: transform 0.05s linear; pointer-events: none;
+        }
+
+        .speaker-button {
+            width: 120px; height: 120px; border-radius: 50% !important; z-index: 1;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .speaker-button.initial { background-color: var(--color-initial) !important; color: #fff !important; }
+        .speaker-button.active { background-color: rgb(var(--mdui-color-primary)) !important; color: rgb(var(--mdui-color-on-primary)) !important; }
+        .volume-ring.active { background-color: rgb(var(--mdui-color-primary)); }
+        
+        .speaker-button.muted { background-color: var(--color-muted) !important; color: #4a0005 !important; }
+        .volume-ring.muted { background-color: var(--color-muted); transform: scale(1) !important; opacity: 0.1; }
+
+    </style>
+</head>
+<body>
+<div class="header-bar" style="display: flex; justify-content: space-between; align-items: center;">
+    <div id="install-overlay" style="display: none; position: absolute; top: 56px; left: 0; width: 100%; height: calc(100vh - 56px); background-color: var(--color-bg); z-index: 999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; box-sizing: border-box;">
+        <mdui-circular-progress id="install-spinner"></mdui-circular-progress>
+        <mdui-icon id="install-success-icon" name="check_circle" style="display: none; font-size: 48px; color: #4CAF50;"></mdui-icon>
+        <mdui-icon id="install-error-icon" name="error_outline" style="display: none; font-size: 48px; color: #ff5252;"></mdui-icon>
+        
+        <div id="install-title" style="font-size: 18px; font-weight: bold; margin-top: 24px;">准备运行环境</div>
+        <div id="install-desc" style="font-size: 13px; color: #888; margin-top: 12px; line-height: 1.6;">
+            首次运行需要自动下载并配置虚拟声卡<br>这大概需要 10 - 20 秒的时间
+        </div>
+    </div>
+        <div class="logo-area" style="display: flex; align-items: center;">
+            <mdui-icon name="podcasts" style="font-size: 20px; margin-right: 8px; color: rgb(var(--mdui-color-primary));"></mdui-icon>
+            <span style="font-weight: bold; font-size: 16px;">ZeroMic</span>
+            <span id="app-version" style="font-size: 10px; margin-left: 8px; opacity: 0.5; font-family: monospace;">v1.0.0</span>
+        </div>
+<div class="header-actions">
+            <mdui-button-icon id="btn-about" icon="info_outline" style="color: #888;" title="关于软件"></mdui-button-icon>
+            <mdui-button-icon id="btn-uninstall" icon="delete_outline" style="color: #888; display: none;" title="卸载驱动"></mdui-button-icon>
+        </div>
+    </div>
+<div id="mic-prompt" style="background-color: rgba(var(--mdui-color-primary), 0.1); padding: 12px 16px; border-bottom: 1px solid rgba(var(--mdui-color-primary), 0.2);">
+    <div style="display: flex; align-items: flex-start;">
+        <mdui-icon name="error_outline" style="font-size: 18px; color: rgb(var(--mdui-color-primary)); margin-top: 2px;"></mdui-icon>
+        <div style="margin-left: 12px; font-size: 12px; line-height: 1.5; opacity: 0.9;">
+            <b style="color: rgb(var(--mdui-color-primary));">配置提醒：</b><br>
+            如需在游戏或会议软件中使用，请将该软件的<b>麦克风输入设备</b>设置为：<br>
+            <span style="font-family: monospace; background: rgba(0,0,0,0.2); padding: 1px 4px; border-radius: 3px;">CABLE Output (VB-Audio Virtual Cable)</span>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="status-card">
+        <div style="display: flex; flex-direction: column;">
+            <span style="font-size: 12px; opacity: 0.6;">手机连接状态</span>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                <div class="dot disconnected" id="conn-dot"></div>
+                <span id="conn-text" style="font-weight: bold; font-size: 15px;">等待设备...</span>
+            </div>
+        </div>
+        <mdui-icon name="smartphone" style="opacity: 0.7;"></mdui-icon>
+    </div>
+
+    <div id="tutorial-card" class="tutorial-card">
+        <mdui-icon name="qr_code_scanner" style="font-size: 32px; color: rgb(var(--mdui-color-primary));"></mdui-icon>
+        <div style="font-size: 16px; font-weight: bold; margin-top: 12px;">等待手机连接</div>
+        <div style="font-size: 13px; color: #aaa; margin-top: 8px; line-height: 1.6;">
+            请确保手机与电脑在同一局域网<br>
+            手机浏览器访问以下地址：
+        </div>
+        <div id="tutorial-ip" class="tutorial-ip-box">加载中...</div>
+        <div style="color: #ff9800; font-size: 12px; margin-top: 4px;">
+            ⚠️ 提示“连接不安全”是正常的<br>请点击【高级】->【继续前往】
+        </div>
+    </div>
+
+    <div id="main-control-area" style="display: none; width: 100%; flex-direction: column; align-items: center;">
+        
+        <div style="width: 100%; margin-bottom: 20px;">
+            <mdui-select id="output-device-select" label="音频输出设备 (自动匹配 CABLE)" style="width: 100%;">
+                <mdui-menu-item value="default">系统默认扬声器</mdui-menu-item>
+            </mdui-select>
+        </div>
+
+        <div class="control-card">
+            <mdui-icon name="volume_down" style="opacity: 0.7;"></mdui-icon>
+            <mdui-slider id="desktop-gain" min="0" max="3" step="0.1" value="1" style="flex-grow: 1;"></mdui-slider>
+            <mdui-icon name="volume_up" style="opacity: 0.7;"></mdui-icon>
+        </div>
+
+        <div class="speaker-section">
+            <div class="volume-ring initial" id="speaker-ring"></div>
+            <mdui-button-icon class="speaker-button initial" id="speaker-toggle">
+                <mdui-icon name="volume_off" id="speaker-icon" style="font-size: 40px;"></mdui-icon>
+            </mdui-button-icon>
+        </div>
+        
+        <div id="status-label" style="margin-top: 24px; color: var(--color-initial); font-weight: 500;">等待传入音频流</div>
+    </div>
+</div>
+
+<mdui-dialog id="dialog-uninstall" headline="确定要卸载驱动吗？">
+    <div style="line-height: 1.6; opacity: 0.8;">
+        卸载后 ZeroMic 将无法把手机声音路由给其他软件（如游戏/语音软件）。<br><br>
+        卸载过程大约需要 2-3 秒，建议稍后重启电脑以彻底清理残留。
+    </div>
+    <mdui-button slot="action" variant="text" id="uninstall-cancel">取消</mdui-button>
+    <mdui-button slot="action" variant="tonal" id="uninstall-confirm" style="color: #ff5252;">确定卸载</mdui-button>
+</mdui-dialog>
+
+<mdui-dialog id="dialog-install-reminder" headline="⚠️ 重要提示：请手动恢复声卡" close-on-esc="false" close-on-overlay-click="false">
+    <div style="line-height: 1.6; opacity: 0.8; margin-bottom: 8px;">
+        虚拟声卡已配置完毕！<br><br>
+        Windows 此时可能已自动将您的<b>默认播放设备</b>切换为 CABLE Input，导致电脑暂时没有声音。<br>
+        <span style="color: #ff9800;">请点击电脑右下角的喇叭 🔊，手动将播放设备切换回您原来的扬声器。</span>
+    </div>
+    <mdui-button slot="action" variant="tonal" id="install-reminder-ok">我已经切回去了</mdui-button>
+</mdui-dialog>
+
+<mdui-dialog id="dialog-about" headline="关于 ZeroMic" close-on-overlay-click>
+    <div style="text-align: center; padding: 10px 0;">
+        <mdui-icon name="podcasts" style="font-size: 48px; color: rgb(var(--mdui-color-primary));"></mdui-icon>
+        <div style="font-size: 20px; font-weight: bold; margin-top: 12px;">ZeroMic Desktop</div>
+        <div id="about-version-text" style="font-size: 12px; opacity: 0.5; margin-top: 4px;">Version 1.1.0</div>
+        
+        <div style="margin-top: 20px; font-size: 13px; line-height: 1.8; opacity: 0.8; text-align: left;">
+            ZeroMic 是一款极简的无线麦克风传输工具，通过 WebRTC 技术将您的手机瞬间变身为电脑的高质量麦克风。
+            <br><br>
+            项目作者：Hypixice Studio<br>
+            开源许可：GPL-3 License
+        </div>
+
+        <div style="margin-top: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+            <mdui-button variant="outlined" href="https://github.com/hypixice/ZeroMic" target="_blank">
+                <mdui-icon name="code" slot="icon"></mdui-icon> GitHub
+            </mdui-button>
+            <mdui-button variant="outlined" href="https://www.hypixice.top" target="_blank">
+                <mdui-icon name="language" slot="icon"></mdui-icon> 官方网站
+            </mdui-button>
+        </div>
+    </div>
+    <mdui-button slot="action" variant="text" onclick="document.getElementById('dialog-about').open = false">关闭</mdui-button>
+</mdui-dialog>
+
+<script>
+    mdui.setColorScheme('#4285F4');
+    
+    // UI 元素
+    const btnAbout = document.getElementById('btn-about');
+    const dialogAbout = document.getElementById('dialog-about');
+    const appVersionLabel = document.getElementById('app-version');
+    const aboutVersionText = document.getElementById('about-version-text');
+    const btnUninstall = document.getElementById('btn-uninstall');
+    const dialogUninstall = document.getElementById('dialog-uninstall');
+    const uninstallConfirmBtn = document.getElementById('uninstall-confirm');
+    const uninstallCancelBtn = document.getElementById('uninstall-cancel');
+    const speakerBtn = document.getElementById('speaker-toggle');
+    const speakerIcon = document.getElementById('speaker-icon');
+    const speakerRing = document.getElementById('speaker-ring');
+    const statusLabel = document.getElementById('status-label');
+    const gainSlider = document.getElementById('desktop-gain');
+    const connDot = document.getElementById('conn-dot');
+    const connText = document.getElementById('conn-text');
+    const outputSelect = document.getElementById('output-device-select');
+    
+    // WebRTC & Audio 变量
+    const socket = io(window.location.origin);
+    let peerConnection;
+    let audioContext, gainNode, analyser, dataArray;
+    let isPlaying = false;
+    let isConnected = false;
+    let globalAudioElement = null;
+    syncAppInfo();
+    // 局域网直连，清空 STUN 配置实现秒连
+    const rtcConfig = { iceServers: [] }; 
+
+    // === 1. 初始化拉取局域网 IP 显示教程 ===
+    fetch('/api/info').then(res => res.json()).then(data => {
+        document.getElementById('tutorial-ip').innerText = `https://${data.ip}:${data.port}`;
+    });
+
+
+    // === 2. 信令连接与状态切换 ===
+    socket.on('connect', () => {
+        socket.eGPL-3('join', { role: 'desktop' });
+    });
+
+    socket.on('ready', (data) => {
+        if (data.role === 'mobile') {
+            isConnected = true;
+            connDot.classList.replace('disconnected', 'connected');
+            connText.innerText = '手机已连接';
+            connText.style.color = '#4CAF50';
+            
+            // 手机连上后：隐藏教程，显示主控区
+            document.getElementById('tutorial-card').style.display = 'none';
+            document.getElementById('main-control-area').style.display = 'flex';
+        }
+    });
+
+    // === 3. (修复点) WebRTC 音频接收逻辑 ===
+    socket.on('offer', async (data) => {
+        peerConnection = new RTCPeerConnection(rtcConfig);
+        
+        // 收到音频流，触发音频播放管线
+        peerConnection.ontrack = (event) => {
+            setupAudioPipeline(event.streams[0]);
+        };
+
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) socket.eGPL-3('ice_candidate', event.candidate);
+        };
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.eGPL-3('answer', answer);
+    });
+
+    socket.on('ice_candidate', (data) => {
+        if (peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(data));
+    });
+
+btnAbout.addEventListener('click', () => {
+        dialogAbout.open = true;
+    });
+
+async function syncAppInfo() {
+        try {
+            const res = await fetch('/api/info');
+            const data = await res.json();
+            if (data.version) {
+                appVersionLabel.innerText = data.version;
+                aboutVersionText.innerText = `Version ${data.version}`;
+            }
+        } catch (e) { console.error("获取版本信息失败", e); }
+    }
+
+async function loadAudioDevices() {
+        try {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // 静默请求权限以获取真实设备名称
+            await navigator.mediaDevices.getUserMedia({ audio: true }); 
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+            
+            outputSelect.innerHTML = ''; 
+            let targetDeviceId = 'default'; 
+            
+            audioOutputs.forEach(device => {
+                const item = document.createElement('mdui-menu-item');
+                item.value = device.deviceId;
+                item.innerText = device.label || `未知音频设备 (${device.deviceId.slice(0,5)})`; 
+                outputSelect.appendChild(item);
+
+                // 智能匹配 CABLE Input
+                if (device.label.toLowerCase().includes('cable input')) {
+                    targetDeviceId = device.deviceId;
+                }
+            });
+
+            if (targetDeviceId !== 'default') {
+                outputSelect.value = targetDeviceId;
+                if (audioContext && typeof audioContext.setSinkId === 'function') {
+                    try {
+                        await audioContext.setSinkId(targetDeviceId);
+                    } catch(e) {}
+                }
+            }
+
+        } catch (err) {
+            console.log("获取音频设备失败，可能权限被拦截", err);
+        }
+    }
+
+    // 弃用 window.onload，改用更安全的 DOMContentLoaded 并配合上方的 setTimeout
+    document.addEventListener('DOMContentLoaded', () => {
+        loadAudioDevices();
+    });
+
+    outputSelect.addEventListener('change', async (e) => {
+        const deviceId = e.target.value;
+        if (audioContext && typeof audioContext.setSinkId === 'function') {
+            try {
+                await audioContext.setSinkId(deviceId);
+            } catch (err) {}
+        }
+    });
+
+    window.addEventListener('load', loadAudioDevices);
+
+    // === 5. Web Audio API 播放管线 ===
+    function setupAudioPipeline(stream) {
+        globalAudioElement = new Audio();
+        globalAudioElement.srcObject = stream;
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        gainNode = audioContext.createGain();
+        analyser = audioContext.createAnalyser();
+        
+        const source = audioContext.createMediaStreamSource(stream);
+        
+        source.connect(gainNode);
+        gainNode.connect(analyser);
+        analyser.connect(audioContext.destination);
+        
+        gainNode.gain.value = gainSlider.value;
+        analyser.fftSize = 256;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        // 如果此时下拉框已经自动选中了 CABLE，顺手应用一下
+        if (audioContext.setSinkId && outputSelect.value !== 'default') {
+             audioContext.setSinkId(outputSelect.value);
+        }
+
+        isPlaying = true;
+        updateUIState('active');
+        drawVolume();
+
+        if (audioContext.state === 'suspended') {
+            statusLabel.innerText = '请点击上方扬声器解除自动播放限制';
+            statusLabel.style.color = '#ff9800'; 
+        }
+    }
+
+    gainSlider.addEventListener('input', (e) => {
+        if (gainNode) gainNode.gain.value = parseFloat(e.target.value);
+    });
+
+    speakerBtn.addEventListener('click', async () => {
+        if (!audioContext) return;
+        
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
+        
+        if (isPlaying) {
+            isPlaying = false;
+            gainNode.gain.value = 0; 
+            updateUIState('muted');
+        } else {
+            isPlaying = true;
+            gainNode.gain.value = gainSlider.value; 
+            updateUIState('active');
+            drawVolume();
+        }
+    });
+
+    function drawVolume() {
+        if (!isPlaying) return;
+        requestAnimationFrame(drawVolume);
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+        let average = sum / dataArray.length;
+        let scale = 1 + (Math.max(0, average - 10) / 100); 
+        speakerRing.style.transform = `scale(${scale})`;
+    }
+
+    function updateUIState(state) {
+        speakerBtn.className = `speaker-button ${state}`;
+        speakerRing.className = `volume-ring ${state}`;
+        
+        if (state === 'active') {
+            speakerIcon.setAttribute('name', 'volume_up');
+            statusLabel.innerText = '';
+            statusLabel.style.color = 'rgb(var(--mdui-color-primary))';
+        } else if (state === 'muted') {
+            speakerIcon.setAttribute('name', 'volume_off');
+            statusLabel.innerText = '电脑端已静音';
+            statusLabel.style.color = 'var(--color-muted)';
+        }
+    }
+
+// === 6. 卸载驱动逻辑 (MDUI Dialog 版) ===
+
+    // 点击垃圾桶图标：打开弹窗
+    btnUninstall.addEventListener('click', () => {
+        dialogUninstall.open = true;
+    });
+
+    // 点击弹窗内的取消：关闭弹窗
+    uninstallCancelBtn.addEventListener('click', () => {
+        dialogUninstall.open = false;
+    });
+
+    // 点击弹窗内的确定：正式开始卸载过程
+
+    uninstallConfirmBtn.addEventListener('click', async () => {
+        // 1. 关闭确认弹窗
+        dialogUninstall.open = false; 
+
+        // 2. 呼出全屏遮罩层 (复用安装时的那个 overlay)
+        const overlay = document.getElementById('install-overlay');
+        const spinner = document.getElementById('install-spinner');
+        const successIcon = document.getElementById('install-success-icon');
+        const errorIcon = document.getElementById('install-error-icon');
+        const title = document.getElementById('install-title');
+        const desc = document.getElementById('install-desc');
+
+        // 初始化遮罩层 UI 为“加载中”状态
+        overlay.style.display = 'flex';
+        overlay.style.opacity = '1';
+        spinner.style.display = 'inline-block';
+        successIcon.style.display = 'none';
+        errorIcon.style.display = 'none';
+        
+        title.innerText = '正在卸载驱动...';
+        title.style.color = 'var(--mdui-color-on-background)'; // 恢复默认文字颜色
+        desc.innerText = '正在清理底层音频路由，请稍候...';
+
+        try {
+            // 3. 请求后端卸载接口
+            const response = await fetch('/api/uninstall_driver', { method: 'POST' });
+            const result = await response.json();
+
+            if (result.success) {
+                // 卸载成功的动画
+                spinner.style.display = 'none';
+                successIcon.style.display = 'inline-block';
+                title.innerText = '驱动已彻底卸载';
+                title.style.color = '#4CAF50';
+                desc.innerHTML = '为了清理注册表残留，建议稍后重启电脑。<br><br>程序即将安全退出...';
+                
+                // 【核心修复】通知后端主动杀掉进程，再也不会报 JS 错误了
+                fetch('/api/exit', { method: 'POST' });
+                
+                // 界面停留在告别语，后端会在 1 秒后把窗口带走
+            } else {
+                // 卸载失败的动画
+                spinner.style.display = 'none';
+                errorIcon.style.display = 'inline-block';
+                title.innerText = '卸载失败';
+                title.style.color = '#ff5252';
+                desc.innerHTML = result.msg;
+                
+                // 3秒后关掉遮罩，让用户还能继续操作
+                setTimeout(() => {
+                    overlay.style.opacity = '0';
+                    setTimeout(() => overlay.style.display = 'none', 300);
+                }, 3000);
+            }
+        } catch (err) {
+            spinner.style.display = 'none';
+            errorIcon.style.display = 'inline-block';
+            title.innerText = '通信丢失';
+            title.style.color = '#ff5252';
+            desc.innerText = '与核心服务的连接已断开，请手动关闭窗口。';
+        }
+    });
+
+// === 7. 启动自检与自动化安装逻辑 ===
+    document.addEventListener('DOMContentLoaded', async () => {
+        const overlay = document.getElementById('install-overlay');
+        const spinner = document.getElementById('install-spinner');
+        const successIcon = document.getElementById('install-success-icon');
+        const errorIcon = document.getElementById('install-error-icon');
+        const title = document.getElementById('install-title');
+        const desc = document.getElementById('install-desc');
+        
+        // 新增的提醒弹窗元素
+        const dialogInstallReminder = document.getElementById('dialog-install-reminder');
+        const installReminderOkBtn = document.getElementById('install-reminder-ok');
+
+        try {
+            // 1. 检查是否已安装
+            const checkRes = await fetch('/api/check_driver');
+            const checkData = await checkRes.json();
+
+            if (!checkData.installed) {
+                // 没安装：保持卸载按钮隐藏，开始安装动画
+                overlay.style.display = 'flex';
+                title.innerText = '正在配置虚拟声卡...';
+                
+                const installRes = await fetch('/api/install_driver', { method: 'POST' });
+                const installData = await installRes.json();
+
+                if (installData.success) {
+                    // 安装成功动画
+                    spinner.style.display = 'none';
+                    successIcon.style.display = 'inline-block';
+                    title.innerText = '配置完成！';
+                    title.style.color = '#4CAF50';
+                    desc.innerText = '即将进入系统...';
+                    
+                    // 延迟 1.5 秒后关闭遮罩，并弹出声卡恢复提醒！
+                    setTimeout(() => {
+                        overlay.style.opacity = '0';
+                        setTimeout(() => {
+                            overlay.style.display = 'none';
+                            
+                            // 【核心新增】弹出提醒框
+                            dialogInstallReminder.open = true;
+                            
+                        }, 300);
+                    }, 1500);
+                } else {
+                    // 安装失败状态
+                    spinner.style.display = 'none';
+                    errorIcon.style.display = 'inline-block';
+                    title.innerText = '安装失败';
+                    title.style.color = '#ff5252';
+                    desc.innerHTML = installData.msg;
+                }
+            } else {
+                // 已安装：显示卸载按钮，直接加载设备
+                btnUninstall.style.display = ''; // 移除隐藏样式
+                loadAudioDevices();
+            }
+        } catch (err) {
+            console.error("环境自检失败", err);
+            btnUninstall.style.display = ''; // 容错处理
+            loadAudioDevices(); 
+        }
+
+        // 【核心新增】监听提醒弹窗的确认按钮
+        installReminderOkBtn.addEventListener('click', () => {
+            dialogInstallReminder.open = false; // 关闭弹窗
+            btnUninstall.style.display = '';     // 显示右上角的卸载按钮
+            loadAudioDevices();                 // 继续加载音频设备和主界面
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+.venv\Scripts\pyinstaller -i icon.ico --onefile --uac-admin --add-data "webui;webui" --hidden-import="engineio.async_drivers.threading" --upx-dir="upx.exe" main.py
