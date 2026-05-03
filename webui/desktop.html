@@ -141,7 +141,7 @@
         <div style="margin-left: 12px; font-size: 12px; line-height: 1.5; opacity: 0.9;">
             <b style="color: rgb(var(--mdui-color-primary));">配置提醒：</b><br>
             如需在游戏或会议软件中使用，请将该软件的<b>麦克风输入设备</b>设置为：<br>
-            <span style="font-family: monospace; background: rgba(0,0,0,0.2); padding: 1px 4px; border-radius: 3px;">CABLE Output (VB-Audio Virtual Cable)</span>
+            <span id="driver-name-display" style="font-family: monospace; background: rgba(0,0,0,0.2); padding: 1px 4px; border-radius: 3px;">虚拟音频设备</span>
         </div>
     </div>
 </div>
@@ -205,13 +205,11 @@
     <mdui-button slot="action" variant="tonal" id="uninstall-confirm" style="color: #ff5252;">确定卸载</mdui-button>
 </mdui-dialog>
 
-<mdui-dialog id="dialog-install-reminder" headline="⚠️ 重要提示：请手动恢复声卡" close-on-esc="false" close-on-overlay-click="false">
-    <div style="line-height: 1.6; opacity: 0.8; margin-bottom: 8px;">
-        虚拟声卡已配置完毕！<br><br>
-        Windows 此时可能已自动将您的<b>默认播放设备</b>切换为 CABLE Input，导致电脑暂时没有声音。<br>
-        <span style="color: #ff9800;">请点击电脑右下角的喇叭 🔊，手动将播放设备切换回您原来的扬声器。</span>
+<mdui-dialog id="dialog-install-reminder" headline="配置完成" close-on-esc="false" close-on-overlay-click="false">
+    <div id="install-reminder-text" style="line-height: 1.6; opacity: 0.8; margin-bottom: 8px;">
+        虚拟音频设备已配置完毕！
     </div>
-    <mdui-button slot="action" variant="tonal" id="install-reminder-ok">我已经切回去了</mdui-button>
+    <mdui-button slot="action" variant="tonal" id="install-reminder-ok">知道了</mdui-button>
 </mdui-dialog>
 
 <mdui-dialog id="dialog-about" headline="关于 ZeroMic" close-on-overlay-click>
@@ -267,9 +265,11 @@
     let isPlaying = false;
     let isConnected = false;
     let globalAudioElement = null;
+    let platformInfo = null;
     syncAppInfo();
+    syncPlatformInfo();
     // 局域网直连，清空 STUN 配置实现秒连
-    const rtcConfig = { iceServers: [] }; 
+    const rtcConfig = { iceServers: [] };
 
     // === 1. 初始化拉取局域网 IP 显示教程 ===
     fetch('/api/info').then(res => res.json()).then(data => {
@@ -333,6 +333,14 @@ async function syncAppInfo() {
         } catch (e) { console.error("获取版本信息失败", e); }
     }
 
+    async function syncPlatformInfo() {
+        try {
+            const res = await fetch('/api/platform_info');
+            platformInfo = await res.json();
+            document.getElementById('driver-name-display').innerText = platformInfo.driver_display_name;
+        } catch (e) { console.error("获取平台信息失败", e); }
+    }
+
 async function loadAudioDevices() {
         try {
             await new Promise(resolve => setTimeout(resolve, 1500));
@@ -352,7 +360,8 @@ async function loadAudioDevices() {
                 outputSelect.appendChild(item);
 
                 // 智能匹配 CABLE Input
-                if (device.label.toLowerCase().includes('cable input')) {
+                const keyword = platformInfo?.driver_match_keyword || 'cable input';
+                if (device.label.toLowerCase().includes(keyword)) {
                     targetDeviceId = device.deviceId;
                 }
             });
@@ -587,7 +596,11 @@ async function loadAudioDevices() {
                         setTimeout(() => {
                             overlay.style.display = 'none';
                             
-                            // 【核心新增】弹出提醒框
+                            // 弹出提醒框，填入平台专属文案
+                            const reminderText = document.getElementById('install-reminder-text');
+                            if (platformInfo?.post_install_warning) {
+                                reminderText.innerText = platformInfo.post_install_warning;
+                            }
                             dialogInstallReminder.open = true;
                             
                         }, 300);

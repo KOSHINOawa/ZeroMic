@@ -6,7 +6,7 @@
   <h1>ZeroMic</h1>
   <p><strong>手机免安装 · 电脑绿色单文件 · MD3 现代 UI 设计</strong></p>
   <p>将你的智能手机瞬间变身为电脑的高保真无线麦克风</p>
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-blue?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/License-GPLv3-green?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/Built%20with-Python%20%7C%20WebRTC-yellow?style=flat-square" alt="Tech">
 </div>
@@ -20,66 +20,76 @@
 
 
 # ✨ 特点
-🚀 拿来就用：一个 .exe 文件，绿色免装，双击跑起来。
+🚀 拿来就用：打包为单个可执行文件，无需安装，双击即用。
 
-🔧 驱动全自动：虚拟声卡自动下载、静默安装、自动配好，不用你动手。
+🔧 虚拟音频自动配置：自动创建虚拟音频设备，无需手动折腾驱动。
 
-🛡️ 防 Windows 抢设备：写了个 COM 接口逻辑，防止系统偷偷把默认播放设备切走。
+🐧 跨平台支持：Windows / Linux / macOS，一套代码三端运行。
 
 ⚡ 延迟够低：WebRTC 局域网直连，通话跟插了线差不多。
 
 🎨 看着舒服：深色界面，MD3 风格，交互跟手，状态反馈清楚。
 
-🧹 走也干净：内置驱动清理，卸载不残留注册表垃圾。
+🧹 走也干净：内置清理功能，卸载不留残留。
 
 
 ## 🚀 快速开始
 
 ### 准备工作
-- 一台 Windows 10 / 11 电脑（需要内置 WebView2 运行环境，现代 Win10/11 已自带）。
+- 一台 Windows 10+ / Linux（需 PulseAudio 或 PipeWire）/ macOS 电脑。
 - 手机与电脑需要处于 **同一个局域网（Wi-Fi）** 下。
 
 ### 使用步骤
-1. 前往 [Releases](https://github.com/hypixice/ZeroMic/releases) 页面下载最新的 `ZeroMic.exe`。
-2. 右键点击 `ZeroMic.exe`，选择 **「以管理员身份运行」**（首次运行需要权限配置虚拟声卡）。
-3. 如果是首次启动，软件会自动下载并部署运行环境，请耐心等待 10-20 秒。
-4. 环境配置完毕后，电脑端会显示一个 URL 地址（如 `https://192.168.x.x:5000`）。
+1. 前往 [Releases](https://github.com/hypixice/ZeroMic/releases) 页面下载对应平台的可执行文件。
+2. **Windows**：右键以管理员身份运行。**Linux/macOS**：直接运行（无需管理员权限）。
+3. 首次启动时软件会自动配置虚拟音频设备。Windows 可能需要下载驱动（10-20 秒），Linux/macOS 秒级完成。
+4. 配置完毕后，电脑端会显示一个 URL 地址（如 `https://192.168.x.x:5000`）。
 5. 在手机浏览器（推荐 Safari / Chrome / Edge）中输入该地址。
-6. 在电脑游戏或语音软件的设置中，将 **麦克风输入设备** 更改为 `CABLE Output (VB-Audio Virtual Cable)`。
+6. 在游戏或语音软件的设置中，将 **麦克风输入设备** 更改为软件提示的虚拟设备名称。
 7. 开始说话吧！
 
 ## 🛠️ 开发者指南 (从源码构建)
 
-如果你想自行修改代码并打包，请按照以下步骤操作：
-
 ```bash
 # 1. 克隆仓库
-git clone [https://github.com/hypixice/ZeroMic.git](https://github.com/hypixice/ZeroMic.git)
+git clone https://github.com/hypixice/ZeroMic.git
 cd ZeroMic
 
-# 2. 创建并激活虚拟环境 (推荐)
+# 2. 创建并激活虚拟环境
 python -m venv .venv
-.\.venv\Scripts\activate
 
-# 3. 安装依赖
+# Windows
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+pip install -r requirements-windows.txt
+
+# Linux / macOS
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 4. 一键打包 (确保你在管理员 PowerShell 中运行)
-.\.venv\Scripts\pyinstaller -i icon.ico -w --onefile --uac-admin --add-data "webui;webui" --hidden-import="engineio.async_drivers.threading" main.py
+# 3. 一键打包
+# Windows
+.\build.bat
+
+# Linux / macOS
+./build.sh
 ```
 
-*注意：打包后请在 `dist` 目录下找到生成的 EXE 文件。*
+打包后的可执行文件位于 `dist/` 目录。
 
 ## ⚠️ 常见问题 (FAQ)
 
-**Q: 手机浏览器提示“不安全”或拒绝访问？**
-A: 因为我们使用了自签名证书来开启局域网 HTTPS（WebRTC 的强制要求）。请在浏览器拦截页面点击“高级” -> “继续访问”即可。
+**Q: 手机浏览器提示”不安全”或拒绝访问？**
+A: 因为我们使用了自签名证书来开启局域网 HTTPS（WebRTC 的强制要求）。请在浏览器拦截页面点击”高级” -> “继续访问”即可。
 
-**Q: 为什么装完之后电脑突然没声音了？**
-A: 这是 Windows 的底层机制，它可能会将新安装的虚拟声卡设为默认扬声器。请点击电脑右下角的喇叭 🔊 图标，手动切换回你原来的扬声器设备即可。
+**Q: 为什么装完之后电脑突然没声音了？（Windows）**
+A: Windows 可能会将新安装的虚拟声卡设为默认扬声器。请点击电脑右下角的喇叭图标，手动切换回原来的扬声器设备。
 
-**Q: 点击卸载驱动报错？**
-A: 请确保软件是以**管理员身份**运行的。卸载完成后建议重启电脑以彻底清理 Windows 音频路由表的残留。
+**Q: Linux 下提示 pactl 命令不可用？**
+A: 请确认已安装 PulseAudio 或 PipeWire。大多数桌面发行版已自带。如果缺失：`sudo apt install pulseaudio-utils`（Debian/Ubuntu）或 `sudo pacman -S pulseaudio`（Arch）。
+
+**Q: 点击卸载驱动报错？（Windows）**
+A: 请确保软件是以**管理员身份**运行的。卸载完成后建议重启电脑以彻底清理音频路由表的残留。
 
 ## 📄 许可协议
 本项目采用 [GPL-3.0 License](LICENSE) 许可协议。任何人都可以自由使用、修改和分发，但衍生作品必须同样开源并采用相同协议。

@@ -1,16 +1,17 @@
-# Web 框架与通信层
+# Web 框架与通信层（全平台通用）
 Flask==3.0.3
 Flask-SocketIO==5.3.6
 
-# 桌面 GUI 容器
-pywebview==5.1
+# 桌面 GUI 容器（跨平台）
+# 注意：pywebview 最高支持 Python 3.13。Python 3.14 用户请先用浏览器直接访问，
+# 或降级到 Python 3.12/3.13 以使用桌面窗口功能。
+pywebview>=5.1
 
-# 底层 COM 接口通信 (用于注入和恢复 Windows 声卡)
-comtypes==1.4.2
-
-# HTTPS 证书动态生成 (解决局域网 WebRTC 必须使用 HTTPS 的限制)
-pyOpenSSL==24.1.0
-cryptography==42.0.5
+# HTTPS 证书动态生成（全平台通用）
+pyOpenSSL>=24.1.0
+cryptography>=42.0.5
 
 # 打包工具
-pyinstaller==6.6.0
+pyinstaller>=6.15.0
+
+# 注意：comtypes 仅 Windows 需要，请用 requirements-windows.txt 安装

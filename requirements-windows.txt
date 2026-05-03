@@ -1,0 +1,2 @@
+# Windows 专属依赖
+comtypes==1.4.2
